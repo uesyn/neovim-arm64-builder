@@ -30,7 +30,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         released="$(gh api repos/${{ github.repository }}/releases --jq ".[0].name | select( . == \"${GIT_TAG}\")")"
-        if [[ -z $released ]]; then
+        if [[ -n $released ]]; then
           echo "::set-output name=released::true"
         else
           echo "::set-output name=released::false"
