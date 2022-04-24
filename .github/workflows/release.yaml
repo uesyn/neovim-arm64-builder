@@ -13,19 +13,6 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Set up QEMU
-      id: qemu
-      uses: docker/setup-qemu-action@v1
-      with:
-        image: tonistiigi/binfmt:latest
-        platforms: arm64
-    - name: Set up Docker Buildx
-      id: buildx
-      uses: docker/setup-buildx-action@v1
-      with:
-        install: true
     - name: Set git tag
       if: github.event_name == 'workflow_dispatch'
       run: |
@@ -37,7 +24,35 @@ jobs:
       run: |
         versions=($(gh api repos/neovim/neovim/tags --jq '.[].name'))
         printf 'GIT_TAG=%s\n' ${versions[0]} >> $GITHUB_ENV
+    - name: Check released
+      id: released
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        released="$(gh api repos/${{ github.repository }}/releases --jq ".[0].name | select( . == \"${GIT_TAG}\")")"
+        if [[ -z $released ]]; then
+          echo "::set-output name=released::true"
+        else
+          echo "::set-output name=released::false"
+        fi
+    - name: Checkout
+      if: ${{ steps.released.outputs.released != 'true' }}
+      uses: actions/checkout@v2
+    - name: Set up QEMU
+      if: ${{ steps.released.outputs.released != 'true' }}
+      id: qemu
+      uses: docker/setup-qemu-action@v1
+      with:
+        image: tonistiigi/binfmt:latest
+        platforms: arm64
+    - name: Set up Docker Buildx
+      if: ${{ steps.released.outputs.released != 'true' }}
+      id: buildx
+      uses: docker/setup-buildx-action@v1
+      with:
+        install: true
     - name: Build
+      if: ${{ steps.released.outputs.released != 'true' }}
       run: |
         docker buildx build --platform linux/arm64 \
           --build-arg CC=gcc-11 \
@@ -46,3 +61,9 @@ jobs:
           --build-arg ARCH=arm64 \
           --build-arg GIT_TAG=${GIT_TAG} \
           -f Dockerfile-builder -o build .
+    - name: Release
+      if: ${{ steps.released.outputs.released != 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create ${GIT_TAG} --notes="${GIT_TAG}" build/*.tar.gz
