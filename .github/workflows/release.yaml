@@ -1,0 +1,46 @@
+name: Release
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+  push:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up QEMU
+      id: qemu
+      uses: docker/setup-qemu-action@v1
+      with:
+        image: tonistiigi/binfmt:latest
+        platforms: arm64
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v1
+      with:
+        install: true
+    - name: Set git tag
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        printf 'GIT_TAG=${{ github.event.inputs.tag_name }}\n' >> $GITHUB_ENV
+    - name: Set latest git tag
+      if: github.event_name == 'push'
+      run: |
+        versions=($(gh api repos/neovim/neovim/tags --jq '.[].name'))
+        printf 'GIT_TAG=%s\n' ${versions[1]} >> $GITHUB_ENV
+    - name: Build
+      run: |
+        docker buildx build --platform linux/arm64 \
+          --build-arg CC=gcc-11 \
+          --build-arg CMAKE_BUILD_TYPE=Release \
+          --build-arg CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX:PATH=" \
+          --build-arg ARCH=arm64 \
+          --build-arg GIT_TAG=${GIT_TAG} \
+          -f Dockerfile-builder -o build .
