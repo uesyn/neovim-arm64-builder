@@ -36,7 +36,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         versions=($(gh api repos/neovim/neovim/tags --jq '.[].name'))
-        printf 'GIT_TAG=%s\n' ${versions[1]} >> $GITHUB_ENV
+        printf 'GIT_TAG=%s\n' ${versions[0]} >> $GITHUB_ENV
     - name: Build
       run: |
         docker buildx build --platform linux/arm64 \
